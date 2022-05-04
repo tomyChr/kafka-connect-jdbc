@@ -225,70 +225,89 @@ public class JdbcSourceTask extends SourceTask {
           }
         }
       }
-      offset = computeInitialOffset(tableOrQuery, offset, timeZone);
+      addQuerier(queryMode, mode, incrementingColumn, timestampColumns, tableOrQuery, offset);
+    }
 
-      String topicPrefix = config.topicPrefix();
-      JdbcSourceConnectorConfig.TimestampGranularity timestampGranularity
-          = JdbcSourceConnectorConfig.TimestampGranularity.get(config);
+    running.set(true);
+    taskThreadId.set(Thread.currentThread().getId());
+    log.info("Started JDBC source task");
 
-      if (mode.equals(JdbcSourceTaskConfig.MODE_BULK)) {
-        tableQueue.add(
-            new BulkTableQuerier(
-                dialect, 
-                queryMode, 
-                tableOrQuery, 
-                topicPrefix, 
-                suffix
-            )
-        );
-      } else if (mode.equals(JdbcSourceTaskConfig.MODE_INCREMENTING)) {
-        tableQueue.add(
-            new TimestampIncrementingTableQuerier(
-                dialect,
-                queryMode,
-                tableOrQuery,
-                topicPrefix,
-                null,
-                incrementingColumn,
-                offset,
-                timestampDelayInterval,
-                timeZone,
-                suffix,
-                timestampGranularity
-            )
-        );
-      } else if (mode.equals(JdbcSourceTaskConfig.MODE_TIMESTAMP)) {
-        tableQueue.add(
-            new TimestampTableQuerier(
-                dialect,
-                queryMode,
-                tableOrQuery,
-                topicPrefix,
-                timestampColumns,
-                offset,
-                timestampDelayInterval,
-                timeZone,
-                suffix,
-                timestampGranularity
-            )
-        );
-      } else if (mode.endsWith(JdbcSourceTaskConfig.MODE_TIMESTAMP_INCREMENTING)) {
-        tableQueue.add(
-            new TimestampIncrementingTableQuerier(
-                dialect,
-                queryMode,
-                tableOrQuery,
-                topicPrefix,
-                timestampColumns,
-                incrementingColumn,
-                offset,
-                timestampDelayInterval,
-                timeZone,
-                suffix,
-                timestampGranularity
-            )
-        );
-      }
+    maxRetriesPerQuerier = config.getInt(JdbcSourceConnectorConfig.QUERY_RETRIES_CONFIG);
+  }
+
+  private void addQuerier(TableQuerier.QueryMode queryMode,
+                          String mode,
+                          String incrementingColumn,
+                          List<String> timestampColumns,
+                          String tableOrQuery,
+                          Map<String, Object> offset) {
+
+    Long timestampDelayInterval
+            = config.getLong(JdbcSourceTaskConfig.TIMESTAMP_DELAY_INTERVAL_MS_CONFIG);
+    TimeZone timeZone = config.timeZone();
+    String suffix = config.getString(JdbcSourceTaskConfig.QUERY_SUFFIX_CONFIG).trim();
+    offset = computeInitialOffset(tableOrQuery, offset, timeZone);
+    String topicPrefix = config.topicPrefix();
+    JdbcSourceConnectorConfig.TimestampGranularity timestampGranularity
+            = JdbcSourceConnectorConfig.TimestampGranularity.get(config);
+
+    TableQuerier querier = null;
+
+    if (mode.equals(JdbcSourceTaskConfig.MODE_BULK)) {
+      querier =
+              new BulkTableQuerier(
+                      dialect,
+                      queryMode,
+                      tableOrQuery,
+                      config.topicPrefix(),
+                      suffix
+              );
+    } else if (mode.equals(JdbcSourceTaskConfig.MODE_INCREMENTING)) {
+      querier = new TimestampIncrementingTableQuerier(
+                      dialect,
+                      queryMode,
+                      tableOrQuery,
+                      topicPrefix,
+                      null,
+                      incrementingColumn,
+                      offset,
+                      timestampDelayInterval,
+                      timeZone,
+                      suffix,
+                      timestampGranularity
+              );
+    } else if (mode.equals(JdbcSourceTaskConfig.MODE_TIMESTAMP)) {
+      querier = new TimestampTableQuerier(
+                      dialect,
+                      queryMode,
+                      tableOrQuery,
+                      topicPrefix,
+                      timestampColumns,
+                      offset,
+                      timestampDelayInterval,
+                      timeZone,
+                      suffix,
+                      timestampGranularity
+              );
+    } else if (mode.endsWith(JdbcSourceTaskConfig.MODE_TIMESTAMP_INCREMENTING)) {
+      querier = new TimestampIncrementingTableQuerier(
+                      dialect,
+                      queryMode,
+                      tableOrQuery,
+                      topicPrefix,
+                      timestampColumns,
+                      incrementingColumn,
+                      offset,
+                      timestampDelayInterval,
+                      timeZone,
+                      suffix,
+                      timestampGranularity
+              );
+    }
+    if (config.getList(JdbcSourceTaskConfig.MASTERDETAIL_GROUPING_COLUMNS_CONFIG) != null) {
+      tableQueue.add(new MasterDetailTableQuerier(querier, config));
+    } else {
+      tableQueue.add(querier);
     }
 
     running.set(true);

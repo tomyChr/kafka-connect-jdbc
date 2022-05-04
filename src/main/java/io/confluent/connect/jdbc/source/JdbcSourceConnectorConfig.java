@@ -371,11 +371,59 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
 
   private static final String SqlServerDatabaseDialectName = "SqlServerDatabaseDialect";
 
+  // new configs for master/detail
+  public static final String MASTERDETAIL_GROUP = "Master/Detail";
+  private static final String MASTERDETAIL_DOC =
+          "Master/Detail feature allowing to group data sets from one table into one record "
+                  + " containing "
+                  + "  * master: fields inserted once per record (taken from the first data set)\n"
+                  + "  * detail: fields inserted from each data set.\n";
+
+  public static final String MASTERDETAIL_MASTER_COLUMNS_CONFIG = "masterdetail.master.columns";
+  private static final String MASTERDETAIL_MASTER_COLUMNS_DOC =
+          "List of column names to be included in the master part of the record. "
+                  + "By default, all columns from the data set will be added. "
+                  + "Use a comma-separated list to specify multiple columns "
+                  + "(for example, ``masterdetail.master.columns: \"Id, FirstName, LastName\"``).";
+  public static final String MASTERDETAIL_MASTER_COLUMNS_DEFAULT = "";
+  private static final String MASTERDETAIL_MASTER_COLUMNS_DISPLAY = "Master/Detail Master Columns";
+
+  public static final String MASTERDETAIL_DETAIL_NAME_CONFIG = "masterdetail.detail.name";
+  private static final String MASTERDETAIL_DETAIL_NAME_DOC =
+          "Detail records will become an ``ARRAY`` where each entry is of the same ``Struct``. "
+                  + "You can specify a (field-)name to be used in the Schema. "
+                  + "(for example, ``masterdetail.detail.name: \"Products\"``).";
+  public static final String MASTERDETAIL_DETAIL_NAME_DEFAULT = "Detail";
+  private static final String MASTERDETAIL_DETAIL_NAME_DISPLAY = "Master/Detail Detail Name";
+
+  public static final String MASTERDETAIL_GROUPING_COLUMNS_CONFIG = "masterdetail.grouping.columns";
+  private static final String MASTERDETAIL_GROUPING_COLUMNS_DOC =
+          "List of column names to be used for grouping data sets in the table to become a detail "
+                  + "record in the output. The master/detail feature will only work if "
+                  + "at least one column is specified for grouping. "
+                  + "Use a comma-separated list to specify multiple columns "
+                  + "(for example, ``masterdetail.grouping.columns: \"ClientID, OrderID\"``).";
+  public static final String MASTERDETAIL_GROUPING_COLUMNS_DEFAULT = "";
+  private static final String MASTERDETAIL_GROUPING_COLUMNS_DISPLAY =
+          "Master/Detail Grouping Columns";
+
+  public static final String MASTERDETAIL_DETAIL_COLUMNS_CONFIG = "masterdetail.detail.columns";
+  private static final String MASTERDETAIL_DETAIL_COLUMNS_DOC =
+          "List of column names to be included in the detail part of the record. "
+                  + "By default, all columns from the data set will be added. "
+                  + "Use a comma-separated list to specify multiple columns "
+                  + "(for example, ``masterdetail.detail.columns: \"ClientID, OrderID, ProductID, "
+                  + "ProductName\"``).";
+  public static final String MASTERDETAIL_DETAIL_COLUMNS_DEFAULT = "";
+  private static final String MASTERDETAIL_DETAIL_COLUMNS_DISPLAY = "Master/Detail Detail Columns";
+
+
   public static ConfigDef baseConfigDef() {
     ConfigDef config = new ConfigDef();
     addDatabaseOptions(config);
     addModeOptions(config);
     addConnectorOptions(config);
+    addMasterDetailOptions(config);
     return config;
   }
 
@@ -781,6 +829,51 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
         Width.MEDIUM,
         TIMESTAMP_GRANULARITY_DISPLAY,
         TIMESTAMP_GRANULARITY_RECOMMENDER);
+  }
+
+  private static final void addMasterDetailOptions(ConfigDef config) {
+    int orderInGroup = 0;
+    config.define(
+        MASTERDETAIL_MASTER_COLUMNS_CONFIG,
+        Type.LIST,
+        MASTERDETAIL_MASTER_COLUMNS_DEFAULT,
+        Importance.MEDIUM,
+        MASTERDETAIL_MASTER_COLUMNS_DOC,
+        MASTERDETAIL_GROUP,
+        ++orderInGroup,
+        Width.MEDIUM,
+        MASTERDETAIL_MASTER_COLUMNS_DISPLAY
+    ).define(
+            MASTERDETAIL_DETAIL_NAME_CONFIG,
+            Type.STRING,
+            MASTERDETAIL_DETAIL_NAME_DEFAULT,
+            Importance.LOW,
+            MASTERDETAIL_DETAIL_NAME_DOC,
+            MASTERDETAIL_GROUP,
+            ++orderInGroup,
+            Width.MEDIUM,
+            MASTERDETAIL_DETAIL_NAME_DISPLAY
+    ).define(
+            MASTERDETAIL_GROUPING_COLUMNS_CONFIG,
+            Type.LIST,
+            MASTERDETAIL_GROUPING_COLUMNS_DEFAULT,
+            Importance.MEDIUM,
+            MASTERDETAIL_GROUPING_COLUMNS_DOC,
+            MASTERDETAIL_GROUP,
+            ++orderInGroup,
+            Width.MEDIUM,
+            MASTERDETAIL_GROUPING_COLUMNS_DISPLAY
+    ).define(
+            MASTERDETAIL_DETAIL_COLUMNS_CONFIG,
+            Type.LIST,
+            MASTERDETAIL_DETAIL_COLUMNS_DEFAULT,
+            Importance.MEDIUM,
+            MASTERDETAIL_DETAIL_COLUMNS_DOC,
+            MASTERDETAIL_GROUP,
+            ++orderInGroup,
+            Width.MEDIUM,
+            MASTERDETAIL_DETAIL_COLUMNS_DISPLAY
+    );
   }
 
   public static final ConfigDef CONFIG_DEF = baseConfigDef();

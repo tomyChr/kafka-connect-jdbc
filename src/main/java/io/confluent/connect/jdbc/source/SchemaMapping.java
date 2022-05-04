@@ -56,10 +56,28 @@ public final class SchemaMapping {
    * @throws SQLException if there is a problem accessing the result set metadata
    */
   public static SchemaMapping create(
-      String schemaName,
-      ResultSetMetaData metadata,
-      DatabaseDialect dialect
-  ) throws SQLException {
+          String schemaName,
+          ResultSetMetaData metadata,
+          DatabaseDialect dialect) throws SQLException {
+    return create(schemaName, metadata, dialect, null, null);
+  }
+
+  /**
+   * Convert the result set into a {@link Schema}.
+   *
+   * @param schemaName the name of the schema; may be null
+   * @param metadata   the result set metadata; never null
+   * @param dialect    the dialect for the source database; never null
+   * @param detailName the optional name of the detail Struct; null if no detail
+   * @return the schema mapping; never null
+   * @throws SQLException if there is a problem accessing the result set metadata
+   */
+  public static SchemaMapping create(
+          String schemaName,
+          ResultSetMetaData metadata,
+          DatabaseDialect dialect,
+          String detailName,
+          SchemaMapping detailSchemaMapping) throws SQLException {
     Map<ColumnId, ColumnDefinition> colDefns = dialect.describeColumns(metadata);
     Map<String, ColumnConverter> colConvertersByFieldName = new LinkedHashMap<>();
     SchemaBuilder builder = SchemaBuilder.struct().name(schemaName);
@@ -74,6 +92,11 @@ public final class SchemaMapping {
       ColumnMapping mapping = new ColumnMapping(colDefn, columnNumber, field);
       ColumnConverter converter = dialect.createColumnConverter(mapping);
       colConvertersByFieldName.put(fieldName, converter);
+    }
+    if (detailName != null) {
+      // add an ARRAY for the detail records
+      builder = builder.field(detailName, SchemaBuilder.array(detailSchemaMapping.schema()))
+              .optional();
     }
     Schema schema = builder.build();
     return new SchemaMapping(schema, colConvertersByFieldName);
