@@ -15,8 +15,10 @@
 
 package io.confluent.connect.jdbc.source;
 
-import java.sql.SQLNonTransientException;
-import java.util.TimeZone;
+import io.confluent.connect.jdbc.dialect.DatabaseDialect;
+import io.confluent.connect.jdbc.dialect.DatabaseDialects;
+import io.confluent.connect.jdbc.source.JdbcSourceConnectorConfig.TransactionIsolationMode;
+import io.confluent.connect.jdbc.util.*;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -28,30 +30,12 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Set;
+import java.sql.SQLNonTransientException;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import io.confluent.connect.jdbc.dialect.DatabaseDialect;
-import io.confluent.connect.jdbc.dialect.DatabaseDialects;
-import io.confluent.connect.jdbc.util.CachedConnectionProvider;
-import io.confluent.connect.jdbc.util.ColumnDefinition;
-import io.confluent.connect.jdbc.util.ColumnId;
-import io.confluent.connect.jdbc.util.TableId;
-import io.confluent.connect.jdbc.util.Version;
-import io.confluent.connect.jdbc.source.JdbcSourceConnectorConfig.TransactionIsolationMode;
 
 /**
  * JdbcSourceTask is a Kafka Connect SourceTask implementation that reads from JDBC databases and
@@ -63,7 +47,7 @@ public class JdbcSourceTask extends SourceTask {
 
   private static final Logger log = LoggerFactory.getLogger(JdbcSourceTask.class);
 
-  private Time time;
+  private final Time time;
   private JdbcSourceTaskConfig config;
   private DatabaseDialect dialect;
   //Visible for Testing
@@ -179,12 +163,8 @@ public class JdbcSourceTask extends SourceTask {
         = config.getString(JdbcSourceTaskConfig.INCREMENTING_COLUMN_NAME_CONFIG);
     List<String> timestampColumns
         = config.getList(JdbcSourceTaskConfig.TIMESTAMP_COLUMN_NAME_CONFIG);
-    Long timestampDelayInterval
-        = config.getLong(JdbcSourceTaskConfig.TIMESTAMP_DELAY_INTERVAL_MS_CONFIG);
     boolean validateNonNulls
         = config.getBoolean(JdbcSourceTaskConfig.VALIDATE_NON_NULL_CONFIG);
-    TimeZone timeZone = config.timeZone();
-    String suffix = config.getString(JdbcSourceTaskConfig.QUERY_SUFFIX_CONFIG).trim();
 
     for (String tableOrQuery : tablesOrQuery) {
       final List<Map<String, String>> tablePartitionsToCheck;
@@ -309,12 +289,6 @@ public class JdbcSourceTask extends SourceTask {
     } else {
       tableQueue.add(querier);
     }
-
-    running.set(true);
-    taskThreadId.set(Thread.currentThread().getId());
-    log.info("Started JDBC source task");
-
-    maxRetriesPerQuerier = config.getInt(JdbcSourceConnectorConfig.QUERY_RETRIES_CONFIG);
   }
 
   protected CachedConnectionProvider connectionProvider(int maxConnAttempts, long retryBackoff) {
@@ -405,7 +379,7 @@ public class JdbcSourceTask extends SourceTask {
 
   @Override
   public List<SourceRecord> poll() throws InterruptedException {
-    log.trace("{} Polling for new data");
+    log.trace("Polling for new data");
 
     Map<TableQuerier, Integer> consecutiveEmptyResults = tableQueue.stream().collect(
         Collectors.toMap(Function.identity(), (q) -> 0));
